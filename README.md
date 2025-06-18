@@ -27,3 +27,20 @@ SF Mono
 Comic Mono
 Consolas
 Monoflow
+
+**Extention:**
+Here are the extension names listed in the image:
+AATWS (Advanced Alt-Tab Window Switcher)
+App Icons Taskbar
+Color Picker
+Forge
+Grand Theft Focus
+Hide Universal Access
+Lock Keys
+Pop Shell
+Proxy Switcher
+Search Light
+Space Bar
+V-Shell
+Xremap
+Let me know if you'd like a brief description of what each one does!
