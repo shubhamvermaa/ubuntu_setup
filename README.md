@@ -29,7 +29,13 @@
 - Monoflow  
 
 ## **Extension**
-- AATWS (Advanced Alt-Tab Window Switcher)  
+- AATWS (Advanced Alt-Tab Window Switcher)
+- Compact Quick Settings
+- Compiz alike magin lamp effect
+- Compiz windows effect
+- Gnome 4x UI Improvement
+- Top Panel Workspace Scroll
+- No overview at start-up
 - App Icons Taskbar  
 - Color Picker  
 - Forge  
