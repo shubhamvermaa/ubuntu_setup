@@ -12,7 +12,8 @@
 
 ## **MONO FONTS**
 - Consolas  
-- Cascadia  
+- Cascadia
+- Commit Mono
 - Eyechart  
 - Fira Code  
 - Fira Mono  
