@@ -1,3 +1,6 @@
+Useful Links:
+Repo Helped install Stremio: https://github.com/Kabir5296/Stremio-Ubuntu24.04-Fix
+
 ## **Font Name**
 - CommitMono  
 - HelveticaNeue  
