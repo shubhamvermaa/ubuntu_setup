@@ -18,7 +18,7 @@ Minimal notes for system setup: links, shortcuts, fonts, and GNOME extensions.
 2. Map **Ctrl + Tab** → **Alt + Tab**  
 3. Move window to workspace (Shift + Left / Right)  
 4. Switch workspaces left / right  
-
+5. Window switcher by default shows windows only on the current workspace, to show app windows from all workspaces run this command: **gsettings set org.gnome.shell.window-switcher current-workspace-only false**
 ---
 
 ## Fonts
