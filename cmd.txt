@@ -1,0 +1,8 @@
+install firefox, chrome, vscode, vscodium, gnome-tweaks, kanata, ghostty, stremio
+about:config : full-screen-api.warning.timeout -> 0
+set up kanata config
+
+set ctrl+tab for app switching
+
+Codeforces:
+Precompute Header setup
