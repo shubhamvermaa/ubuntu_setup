@@ -1,4 +1,5 @@
 {
+    "telemetry.telemetryLevel": "off",
     "launch": {
         "configurations": [],
         "compounds": []
@@ -81,7 +82,7 @@
     "files.autoSave": "afterDelay",
     "code-runner.runInTerminal": true,
     "workbench.iconTheme": "material-icon-theme",
-    "editor.fontFamily": " Iosevka ,Consolas, JetBrains Mono,MonoLisa , Fira Code , SF Mono , 'Courier New' , monospace , Pragmata Pro , Cascadia Code",
+    "editor.fontFamily": "CommitMono Nerd Font Mono, Iosevka Nerd Font ,Consolas, JetBrains Mono,MonoLisa , Fira Code , SF Mono , 'Courier New' , monospace , Pragmata Pro , Cascadia Code",
     "editor.mouseWheelZoom": true,
     "editor.minimap.enabled": false,
     "security.workspace.trust.untrustedFiles": "open",
@@ -130,7 +131,6 @@
     "editor.scrollbar.vertical": "auto",
     "files.autoSaveDelay": 500,
     "editor.quickSuggestionsDelay": 100,
-    "workbench.colorTheme": "Default Dark+",
     "editor.scrollbar.horizontalScrollbarSize": 15,
     "C_Cpp.files.exclude": {
         "**/.vscode": true,
@@ -273,9 +273,6 @@
     "cph.language.cpp.Args": "-std=c++20",
     "workbench.activityBar.location": "top",
     "window.menuBarVisibility": "compact",
-    // "terminal.integrated.shellArgs.windows": [
-    //   "-NoLogo"
-    // ],
     "workbench.settings.applyToAllProfiles": [
         "terminal.integrated.defaultProfile.windows"
     ],
@@ -284,4 +281,6 @@
     "editor.stickyScroll.enabled": false,
     "editor.fontSize": 16,
     "window.zoomLevel": 1,
+    "workbench.startupEditor": "none",
+    "clangd.path": "/home/shubhamverma/.config/VSCodium/User/globalStorage/llvm-vs-code-extensions.vscode-clangd/install/21.1.0/clangd_21.1.0/bin/clangd",
 }
