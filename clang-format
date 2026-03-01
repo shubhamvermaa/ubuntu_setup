@@ -2,10 +2,13 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 100
 BreakBeforeBraces: Attach
 AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: AllIfsAndElse
 AllowShortLoopsOnASingleLine: true
-AllowShortNamespacesOnASingleLine: true
-ShortLambdaStyle: SLS_All
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLambdasOnASingleLine: All
+CompactNamespaces: true
+
+# To check if config is correct run : clang-format -style=file -dump-config
+# below config needs clang-format 20 or above
+# AllowShortNamespacesOnASingleLine: true
