@@ -10,5 +10,7 @@ AllowShortLambdasOnASingleLine: All
 CompactNamespaces: true
 
 # To check if config is correct run : clang-format -style=file -dump-config
+# To check clang-format version : clang-format --version
+
 # below config needs clang-format 20 or above
 # AllowShortNamespacesOnASingleLine: true
