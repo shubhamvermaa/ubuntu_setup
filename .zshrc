@@ -1,17 +1,11 @@
-# PROMPT='%~ ❯ '
-# PROMPT='%F{white}%~%f %F{red}❯%f '
+# ==========================================
+# 1. ENVIRONMENT & PATHS
+# ==========================================
+export PATH="$HOME/Library/Python/3.9/bin:/home/shubhamverma/.opencode/bin:$PATH"
 
-autoload -Uz vcs_info
-precmd() { vcs_info }
-
-zstyle ':vcs_info:git:*' formats '%b '
-
-setopt PROMPT_SUBST
-PROMPT='%F{#6d6d86}%*%f %F{#ffa600}%~%f %F{#61b8ff}${vcs_info_msg_0_}%f%F{#FF0469}❯%f '
-export PATH="$HOME/Library/Python/3.9/bin:$PATH"
-source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
+# ==========================================
+# 2. HISTORY BEHAVIOR
+# ==========================================
 HISTFILE=$HOME/.zhistory
 SAVEHIST=1000
 HISTSIZE=999
@@ -20,12 +14,67 @@ setopt hist_expire_dups_first
 setopt hist_ignore_dups
 setopt hist_verify
 
+# ==========================================
+# 3. COMPLETION ENGINE (MUST BE BEFORE PLUGINS)
+# ==========================================
+autoload -Uz compinit && compinit
+
+# ==========================================
+# 4. PROMPT & VERSION CONTROL
+# ==========================================
+autoload -Uz vcs_info
+precmd() { vcs_info }
+
+zstyle ':vcs_info:git:*' formats '%b '
+
+setopt PROMPT_SUBST
+PROMPT='%F{#6d6d86}%*%f %F{#ffa600}%~%f %F{#61b8ff}${vcs_info_msg_0_}%f%F{#FF0469}❯%f '
+
+# ==========================================
+# 5. KEYBINDINGS
+# ==========================================
 bindkey '^[[A' history-search-backward
 bindkey '^[[B' history-search-forward
 
+# ==========================================
+# 6. ALIASES & EXTERNAL TOOLS
+# ==========================================
 alias ls="eza --icons=always"
+alias bat="batcat"
 
-# ---- Zoxide (better cd) Opacity/Bac
 eval "$(zoxide init zsh)"
 alias cd="z"
-alias bat="batcat"
+
+# ==========================================
+# 7. PLUGINS (ORDER IS CRITICAL)
+# ==========================================
+source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh-fzf-tab/fzf-tab.plugin.zsh
+
+# Syntax highlighting MUST be the absolute last plugin loaded
+source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# ==========================================
+# 8. PLUGIN CONFIGURATION
+# ==========================================
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --icons --color=always $realpath'
+zstyle ':fzf-tab:complete:git-checkout:*' fzf-preview 'git log --color=always --oneline -50 $word'
+
+# ==========================================
+# 9. CUSTOM FUNCTIONS
+# ==========================================
+update-zsh-plugins() {
+    local plugins=(
+        "/usr/share/zsh-fzf-tab"
+        # Add other git-cloned paths here if needed
+    )
+
+    for plugin in $plugins; do
+        if [ -d "$plugin/.git" ]; then
+            echo "Updating $(basename $plugin)..."
+            sudo git -C "$plugin" pull
+        else
+            echo "Skipping $(basename $plugin) (not a git repo or not found)"
+        fi
+    done
+}
