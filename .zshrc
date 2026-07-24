@@ -2,7 +2,9 @@
 # 1. ENVIRONMENT & PATHS
 # ==========================================
 export PATH="$HOME/Library/Python/3.9/bin:/home/shubhamverma/.opencode/bin:$PATH"
-
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+export EDITOR="nvim"
+export VISUAL="nvim"
 # ==========================================
 # 2. HISTORY BEHAVIOR
 # ==========================================
@@ -13,7 +15,7 @@ setopt share_history
 setopt hist_expire_dups_first
 setopt hist_ignore_dups
 setopt hist_verify
-
+stty -ixon
 # ==========================================
 # 3. COMPLETION ENGINE (MUST BE BEFORE PLUGINS)
 # ==========================================
@@ -63,18 +65,10 @@ zstyle ':fzf-tab:complete:git-checkout:*' fzf-preview 'git log --color=always --
 # ==========================================
 # 9. CUSTOM FUNCTIONS
 # ==========================================
-update-zsh-plugins() {
-    local plugins=(
-        "/usr/share/zsh-fzf-tab"
-        # Add other git-cloned paths here if needed
-    )
+export PATH=~/.npm-global/bin:$PATH
 
-    for plugin in $plugins; do
-        if [ -d "$plugin/.git" ]; then
-            echo "Updating $(basename $plugin)..."
-            sudo git -C "$plugin" pull
-        else
-            echo "Skipping $(basename $plugin) (not a git repo or not found)"
-        fi
-    done
-}
+
+# Added by Antigravity CLI installer
+export PATH="/home/shubhamverma/.local/bin:$PATH"
+export PATH="/home/shubhamverma/.local/bin:$PATH"
+export PATH="/home/shubhamverma/.local/bin:$PATH"
