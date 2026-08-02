@@ -51,16 +51,9 @@ alias cd="z"
 # 7. PLUGINS (ORDER IS CRITICAL)
 # ==========================================
 source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-source /usr/share/zsh-fzf-tab/fzf-tab.plugin.zsh
 
 # Syntax highlighting MUST be the absolute last plugin loaded
 source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
-# ==========================================
-# 8. PLUGIN CONFIGURATION
-# ==========================================
-zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --icons --color=always $realpath'
-zstyle ':fzf-tab:complete:git-checkout:*' fzf-preview 'git log --color=always --oneline -50 $word'
 
 # ==========================================
 # 9. CUSTOM FUNCTIONS

@@ -1,6 +1,6 @@
 #!/bin/bash
 # set_custom_keybindings.sh
-# Applies custom GNOME keyboard shortcuts.
+# Applies custom GNOME keyboard shortcuts on Fedora.
 
 if [ "$EUID" -eq 0 ]; then
     echo "Warning: Do not run this script with sudo. Run it as your normal user."
@@ -26,4 +26,3 @@ gsettings set org.gnome.desktop.wm.keybindings panel-main-menu "['<Control>space
 gsettings set org.gnome.shell.keybindings toggle-overview "['<Control>space']"
 
 echo "Done! Shortcuts applied successfully."
-
