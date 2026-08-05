@@ -1,0 +1,6 @@
+/**
+ * Colors Scheme for Type-1 Launcher
+ * Available: catppuccin, nord, dracula, onedark, tokyonight, cyberpunk, etc.
+ **/
+
+@import "~/.config/rofi/colors/catppuccin.rasi"
