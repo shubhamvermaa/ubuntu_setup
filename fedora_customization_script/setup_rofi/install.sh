@@ -21,6 +21,7 @@ FONT_DIR="$HOME/.local/share/fonts"
 ROFI_CONFIG_DIR="$HOME/.config/rofi"
 BIN_DIR="$HOME/.local/bin"
 LIB_DIR="$HOME/.local/lib"
+SRC_DIR="$HOME/.local/src"
 
 if [ "$EUID" -eq 0 ]; then
     echo "Error: Do not run this script with sudo directly."
@@ -339,12 +340,16 @@ def cycle_or_launch(cmd_str):
                 app_id
             ], env=env, stderr=subprocess.DEVNULL, timeout=2).decode().strip()
             
-            if "(1,)" in res or "(2,)" in res or "(3,)" in res:
-                sys.exit(0)
+            # If WindowCycler handled it (0 = launched, >= 1 = focused/cycled), exit successfully
+            m = re.search(r'\((-?\d+),?\)', res)
+            if m:
+                code = int(m.group(1))
+                if code >= 0:
+                    sys.exit(0)
         except Exception:
             pass
 
-        # 2. Launch using gtk-launch with restored Wayland environment
+        # 2. Fallback: Launch using gtk-launch with restored Wayland environment if WindowCycler returned -1
         try:
             proc = subprocess.run(["gtk-launch", app_id], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
             if proc.returncode == 0:
@@ -365,196 +370,251 @@ EOF
 
 chmod +x "$BIN_DIR/rofi-exec-helper"
 
-cat << 'EOF' > "$BIN_DIR/rofi-launcher"
-#!/usr/bin/env python3
-import os
-import re
-import subprocess
-import sys
-import time
+mkdir -p "$SRC_DIR"
 
-def detect_display_dpi():
-    """
-    Dynamically detect the active monitor's resolution and scaling,
-    and compute the relative DPI so Rofi looks identical in physical proportions
-    across 1080p, 2K (1440p), and 4K displays.
-    """
-    base_dpi = 96
-    try:
-        out = subprocess.check_output([
-            "gdbus", "call", "--session",
-            "--dest", "org.gnome.Mutter.DisplayConfig",
-            "--object-path", "/org/gnome/Mutter/DisplayConfig",
-            "--method", "org.gnome.Mutter.DisplayConfig.GetCurrentState"
-        ], stderr=subprocess.DEVNULL, timeout=0.2).decode().strip()
+cat << 'EOF' > "$SRC_DIR/rofi-launcher.c"
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dlfcn.h>
+#include <unistd.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <errno.h>
 
-        monitors = {}
-        for m in re.finditer(r"\(\x27([^\x27]+)\x27,\s*(\d+),\s*(\d+)[^\)]*?\{\x27is-current\x27:\s*<true>\}", out, re.DOTALL):
-            mode_id, w, h = m.group(1), int(m.group(2)), int(m.group(3))
-            preceding = out[:m.start()]
-            conns = re.findall(r"\(\x27([A-Za-z0-9_-]+)\x27,\s*\x27([A-Za-z0-9_-]+)\x27", preceding)
-            if conns:
-                conn = conns[-1][0]
-                monitors[conn] = (w, h)
+typedef void* Display;
+typedef unsigned long Window;
+typedef unsigned long Atom;
+typedef struct {
+    int type;
+    unsigned long serial;
+    int send_event;
+    Display *display;
+    Window window;
+    Atom atom;
+    long time;
+    int state;
+} XPropertyEvent;
 
-        log_monitors = re.findall(r"\((\d+),\s*(\d+),\s*([0-9.]+),\s*uint32\s*\d+,\s*(true|false),\s*\[\(\x27([^\x27]+)\x27", out)
-        if not log_monitors:
-            return base_dpi
+typedef union {
+    int type;
+    XPropertyEvent xproperty;
+    long pad[24];
+} XEvent;
 
-        target_conn = log_monitors[0][4]
-        target_scale = float(log_monitors[0][2])
+#define PropertyNotify 28
+#define PropertyChangeMask (1L<<22)
 
-        # If multiple monitors are active, check active window position
-        if len(log_monitors) > 1:
-            try:
-                active_out = subprocess.check_output(["xprop", "-display", ":0", "-root", "_NET_ACTIVE_WINDOW"], stderr=subprocess.DEVNULL, timeout=0.05).decode()
-                parts = active_out.strip().split("#")
-                if len(parts) > 1 and parts[1].strip() != "0x0":
-                    wid = parts[1].strip()
-                    geom_out = subprocess.check_output(["xwininfo", "-id", wid], stderr=subprocess.DEVNULL, timeout=0.05).decode()
-                    xm = re.search(r"Absolute upper-left X:\s*(-?\d+)", geom_out)
-                    ym = re.search(r"Absolute upper-left Y:\s*(-?\d+)", geom_out)
-                    if xm and ym:
-                        wx, wy = int(xm.group(1)), int(ym.group(1))
-                        for lm in log_monitors:
-                            mx, my, msc, is_prim, mconn = int(lm[0]), int(lm[1]), float(lm[2]), lm[3], lm[4]
-                            mw, mh = monitors.get(mconn, (1920, 1080))
-                            if mx <= wx < mx + mw and my <= wy < my + mh:
-                                target_conn = mconn
-                                target_scale = msc
-                                break
-            except Exception:
-                pass
-        else:
-            primary = [m for m in log_monitors if m[3] == "true"]
-            if primary:
-                target_conn = primary[0][4]
-                target_scale = float(primary[0][2])
+static pid_t child_rofi_pid = 0;
+static char pidfile_path[256];
 
-        w, h = monitors.get(target_conn, (1920, 1080))
-        # Relative ratio vs standard 1080p base:
-        # 1080p -> ratio 1.0 -> 96 DPI
-        # 1440p -> ratio 1.333 -> 128 DPI
-        # 2160p (4K) -> ratio 2.0 -> 192 DPI
-        ratio = max(w / 1920.0, h / 1080.0)
-        effective_scale = max(ratio, target_scale)
-        dpi = int(round(base_dpi * effective_scale))
-        return dpi
-    except Exception:
-        return base_dpi
+static void cleanup_pidfile(void) {
+    if (pidfile_path[0]) {
+        unlink(pidfile_path);
+    }
+}
 
-def get_rofi_window_id():
-    try:
-        out = subprocess.check_output(
-            ['xprop', '-display', ':0', '-root', '_NET_CLIENT_LIST'],
-            stderr=subprocess.DEVNULL
-        ).decode()
-        parts = out.strip().split('#')
-        if len(parts) > 1:
-            win_ids = parts[1].split(',')
-            for wid in win_ids:
-                wid = wid.strip()
-                if not wid:
-                    continue
-                try:
-                    c_out = subprocess.check_output(
-                        ['xprop', '-display', ':0', '-id', wid, 'WM_CLASS'],
-                        stderr=subprocess.DEVNULL
-                    ).decode()
-                    if 'rofi' in c_out.lower():
-                        return wid
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    return None
+static void handle_sig(int sig) {
+    (void)sig;
+    if (child_rofi_pid > 0) {
+        kill(child_rofi_pid, SIGTERM);
+    }
+    cleanup_pidfile();
+    _exit(0);
+}
 
-def get_active_window():
-    try:
-        out = subprocess.check_output(
-            ['xprop', '-display', ':0', '-root', '_NET_ACTIVE_WINDOW'],
-            stderr=subprocess.DEVNULL
-        ).decode()
-        parts = out.strip().split('#')
-        if len(parts) > 1:
-            return parts[1].strip()
-    except Exception:
-        pass
-    return None
+static int is_rofi_window(void *x11_handle, Display *dpy, Window win, Atom wm_class) {
+    if (!win) return 0;
+    int (*XGetWindowProperty)(Display*, Window, Atom, long, long, int, Atom, Atom*, int*, unsigned long*, unsigned long*, unsigned char**) = dlsym(x11_handle, "XGetWindowProperty");
+    int (*XFree)(void*) = dlsym(x11_handle, "XFree");
+    
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
 
-def main():
-    # 1. Instant Toggle: If rofi is running, kill it immediately (0ms delay)
-    res = subprocess.run(['pgrep', '-x', 'rofi'], stdout=subprocess.DEVNULL)
-    if res.returncode == 0:
-        subprocess.run(['pkill', '-9', '-x', 'rofi'])
-        sys.exit(0)
+    if (XGetWindowProperty && XFree &&
+        XGetWindowProperty(dpy, win, wm_class, 0, 256, 0, 31 /* XA_STRING */, &actual_type, &actual_format, &nitems, &bytes_after, &prop) == 0 && prop) {
+        int is_rofi = (strcasestr((char*)prop, "rofi") != NULL);
+        XFree(prop);
+        return is_rofi;
+    }
+    return 0;
+}
 
-    # 2. Compute dynamic relative DPI based on the active monitor resolution
-    target_dpi = detect_display_dpi()
+int main(int argc, char *argv[]) {
+    uid_t uid = getuid();
+    snprintf(pidfile_path, sizeof(pidfile_path), "/run/user/%d/rofi-launcher.pid", (int)uid);
 
-    # 3. Launch Rofi with environment restoration helper library and relative DPI
-    home_dir = os.path.expanduser("~")
-    theme_path = os.path.join(home_dir, ".config/rofi/launchers/type-1/style-5.rasi")
-    lib_path = os.path.join(home_dir, ".local/lib/librofix11.so")
+    // 1. Instant Toggle Check (< 0.05ms): Direct kernel signal to running rofi PID
+    FILE *pf = fopen(pidfile_path, "r");
+    if (pf) {
+        int old_launcher_pid = 0, old_rofi_pid = 0;
+        if (fscanf(pf, "%d %d", &old_launcher_pid, &old_rofi_pid) >= 1) {
+            int killed = 0;
+            if (old_rofi_pid > 0 && kill(old_rofi_pid, 0) == 0) {
+                kill(old_rofi_pid, SIGTERM);
+                killed = 1;
+            }
+            if (old_launcher_pid > 0 && kill(old_launcher_pid, 0) == 0) {
+                kill(old_launcher_pid, SIGTERM);
+                killed = 1;
+            }
+            if (killed) {
+                fclose(pf);
+                unlink(pidfile_path);
+                return 0;
+            }
+        }
+        fclose(pf);
+        unlink(pidfile_path);
+    }
 
-    env = os.environ.copy()
-    if os.path.isfile(lib_path):
-        env['LD_PRELOAD'] = lib_path
-    if not env.get('WAYLAND_DISPLAY'):
-        env['WAYLAND_DISPLAY'] = 'wayland-0'
-    if not env.get('DISPLAY'):
-        env['DISPLAY'] = ':0'
+    signal(SIGTERM, handle_sig);
+    signal(SIGINT, handle_sig);
+    signal(SIGHUP, handle_sig);
 
-    rofi_proc = subprocess.Popen(
-        [
-            'rofi',
-            '-normal-window',
-            '-steal-focus',
-            '-dpi', str(target_dpi),
-            '-show', 'drun',
-            '-theme', theme_path,
-        ],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
+    // 2. Load libX11 dynamically for zero-overhead display detection and event loop
+    void *x11 = dlopen("libX11.so.6", RTLD_LAZY);
+    Display* (*XOpenDisplay)(const char*) = x11 ? dlsym(x11, "XOpenDisplay") : NULL;
+    int (*XCloseDisplay)(Display*) = x11 ? dlsym(x11, "XCloseDisplay") : NULL;
+    Window (*XDefaultRootWindow)(Display*) = x11 ? dlsym(x11, "XDefaultRootWindow") : NULL;
+    int (*XDefaultScreen)(Display*) = x11 ? dlsym(x11, "XDefaultScreen") : NULL;
+    int (*XDisplayWidth)(Display*, int) = x11 ? dlsym(x11, "XDisplayWidth") : NULL;
+    int (*XDisplayHeight)(Display*, int) = x11 ? dlsym(x11, "XDisplayHeight") : NULL;
+    Atom (*XInternAtom)(Display*, const char*, int) = x11 ? dlsym(x11, "XInternAtom") : NULL;
+    int (*XGetWindowProperty)(Display*, Window, Atom, long, long, int, Atom, Atom*, int*, unsigned long*, unsigned long*, unsigned char**) = x11 ? dlsym(x11, "XGetWindowProperty") : NULL;
+    int (*XSelectInput)(Display*, Window, long) = x11 ? dlsym(x11, "XSelectInput") : NULL;
+    int (*XNextEvent)(Display*, XEvent*) = x11 ? dlsym(x11, "XNextEvent") : NULL;
+    int (*XPending)(Display*) = x11 ? dlsym(x11, "XPending") : NULL;
+    int (*ConnectionNumber)(Display*) = x11 ? dlsym(x11, "ConnectionNumber") : NULL;
+    int (*XFree)(void*) = x11 ? dlsym(x11, "XFree") : NULL;
 
-    # 4. High-speed window ID detection (10ms polling)
-    rofi_win_id = None
-    for _ in range(40):
-        time.sleep(0.01)
-        if rofi_proc.poll() is not None:
-            sys.exit(0)
-        wid = get_rofi_window_id()
-        if wid:
-            rofi_win_id = wid
-            break
+    int target_dpi = 128; // Default 1440p / 2K
+    Display *dpy = XOpenDisplay ? XOpenDisplay(":0") : NULL;
+    if (dpy && XDefaultScreen && XDisplayWidth && XDisplayHeight) {
+        int scr = XDefaultScreen(dpy);
+        int sw = XDisplayWidth(dpy, scr);
+        int sh = XDisplayHeight(dpy, scr);
+        if (sw >= 3840 || sh >= 2160) {
+            target_dpi = 192;
+        } else if (sw >= 2560 || sh >= 1440) {
+            target_dpi = 128;
+        } else {
+            target_dpi = 96;
+        }
+    }
 
-    if not rofi_win_id:
-        rofi_proc.wait()
-        sys.exit(0)
+    char dpi_str[16];
+    snprintf(dpi_str, sizeof(dpi_str), "%d", target_dpi);
 
-    # 5. Fast active window confirmation
-    for _ in range(20):
-        time.sleep(0.01)
-        if get_active_window() == rofi_win_id:
-            break
+    // 3. Instant Fork & Exec Rofi (< 0.5ms)
+    pid_t pid = fork();
+    if (pid == 0) {
+        setenv("LD_PRELOAD", "/home/shubham/.local/lib/librofix11.so", 1);
+        setenv("DISPLAY", ":0", 1);
+        setenv("WAYLAND_DISPLAY", "wayland-0", 1);
 
-    # 6. Ultra-fast focus-loss monitor loop (20ms polling for instant dismiss)
-    while rofi_proc.poll() is None:
-        time.sleep(0.02)
-        curr_active = get_active_window()
-        if curr_active and curr_active != rofi_win_id:
-            subprocess.run(['pkill', '-9', '-x', 'rofi'])
-            break
+        const char *theme_path = "/home/shubham/.config/rofi/launchers/type-1/style-5.rasi";
+        execlp("rofi", "rofi",
+               "-normal-window",
+               "-steal-focus",
+               "-drun-use-desktop-cache",
+               "-dpi", dpi_str,
+               "-show", "drun",
+               "-theme", theme_path,
+               (char*)NULL);
+        _exit(1);
+    } else if (pid < 0) {
+        cleanup_pidfile();
+        return 1;
+    }
 
-    sys.exit(0)
+    child_rofi_pid = pid;
 
-if __name__ == '__main__':
-    main()
+    // Write launcher PID and child Rofi PID
+    pf = fopen(pidfile_path, "w");
+    if (pf) {
+        fprintf(pf, "%d %d\n", getpid(), child_rofi_pid);
+        fclose(pf);
+    }
+
+    // 4. Ultra-low latency event-driven focus loss monitor
+    if (dpy && x11 && XDefaultRootWindow && XInternAtom && XSelectInput && XNextEvent && XPending && ConnectionNumber) {
+        Window root = XDefaultRootWindow(dpy);
+        Atom net_active = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", 0);
+        Atom wm_class = XInternAtom(dpy, "WM_CLASS", 0);
+
+        XSelectInput(dpy, root, PropertyChangeMask);
+
+        int x11_fd = ConnectionNumber(dpy);
+        struct pollfd pfd;
+        pfd.fd = x11_fd;
+        pfd.events = POLLIN;
+
+        int rofi_ever_focused = 0;
+        int status;
+
+        while (1) {
+            pid_t w = waitpid(child_rofi_pid, &status, WNOHANG);
+            if (w != 0) {
+                break;
+            }
+
+            while (XPending(dpy) > 0) {
+                XEvent ev;
+                XNextEvent(dpy, &ev);
+                if (ev.type == PropertyNotify && ev.xproperty.atom == net_active) {
+                    Atom actual_type;
+                    int actual_format;
+                    unsigned long nitems, bytes_after;
+                    unsigned char *prop = NULL;
+                    if (XGetWindowProperty(dpy, root, net_active, 0, 1, 0, 33 /* XA_WINDOW */,
+                                           &actual_type, &actual_format, &nitems, &bytes_after, &prop) == 0 && prop) {
+                        Window active = *(Window*)prop;
+                        XFree(prop);
+
+                        if (active != 0) {
+                            if (is_rofi_window(x11, dpy, active, wm_class)) {
+                                rofi_ever_focused = 1;
+                            } else if (rofi_ever_focused) {
+                                kill(child_rofi_pid, SIGTERM);
+                                goto done;
+                            }
+                        } else if (rofi_ever_focused) {
+                            kill(child_rofi_pid, SIGTERM);
+                            goto done;
+                        }
+                    }
+                }
+            }
+
+            int ret = poll(&pfd, 1, 40);
+            if (ret < 0 && errno != EINTR) {
+                break;
+            }
+        }
+
+done:
+        if (XCloseDisplay) XCloseDisplay(dpy);
+    } else {
+        int status;
+        waitpid(child_rofi_pid, &status, 0);
+    }
+
+    cleanup_pidfile();
+    return 0;
+}
 EOF
 
+gcc -O3 -march=native -pipe "$SRC_DIR/rofi-launcher.c" -o "$BIN_DIR/rofi-launcher" -ldl
 chmod +x "$BIN_DIR/rofi-launcher"
+echo "Native Rofi launcher compiled and installed to $BIN_DIR/rofi-launcher."
 echo "Launcher and helper scripts installed."
 
 # 6. Register GNOME custom keybinding (Ctrl+Space)

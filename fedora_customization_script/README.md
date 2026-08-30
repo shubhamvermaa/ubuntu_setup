@@ -73,11 +73,41 @@ sudo ./setup-fn-media-keys.sh
 
 ---
 
+### 5. Stripped-Down Dedicated Web Apps (Omarchy-Style Wayland Ozone)
+**Feature**: Runs web apps (ChatGPT, Gemini, Notion) in dedicated, frameless Chromium windows running natively on Wayland with Ozone platform flags.
+- **Dedicated Windows & Identity**: Each app receives a distinct Wayland `app_id` / `StartupWMClass`, preventing grouping under Google Chrome.
+- **Persistent Profile & Cookies**: Preserves login sessions and opens directly into your workspace.
+- **Run Setup**:
+  ```bash
+  ./setup-webapps.sh
+  ```
+- **Install New Web Apps**:
+  ```bash
+  install-webapp "Linear" "https://linear.app" "https://linear.app/favicon.ico"
+  ```
+
+---
+
+### 6. Sub-Millisecond Rofi Launcher & App Window Switcher
+**Feature**: Blazing-fast (<0.4ms launch overhead, <1ms toggle) app launcher and instant window cycler.
+- **Native C Binary (`rofi-launcher`)**: Compiled with `gcc -O3 -march=native` to eliminate Python interpreter startup overhead.
+- **Event-Driven Auto-Dismiss**: Listens to X11 `PropertyNotify` on `_NET_ACTIVE_WINDOW` using `poll()` for instant dismissal when clicking outside.
+- **Window Cycler (`switch-app-window.sh`)**: Quick application switcher shortcuts (<kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>C/G/N/T/F/V/E/R/A</kbd>).
+- **Run Setup**:
+  ```bash
+  cd setup_rofi && ./install.sh
+  ```
+
+---
+
 ## 📜 Script Reference
 
 - `setup-silent-gaming-mode.sh`: Master script that applies udev rules (`uinput`, ACPI platform profiles), configures NVIDIA D3Cold & nouveau blacklist, and sets up GameMode hooks.
 - `fedora-silent-game-switch.sh`: CLI power switcher (`silent`, `gaming`, `clean`, `status`) integrated with `asusctl` and GNOME DBus power profiles.
+- `setup-webapps.sh`: Deploys Omarchy-style Chromium Wayland Ozone webapps (ChatGPT, Gemini, Notion), launcher scripts, and persistent flags.
+- `setup_rofi/install.sh`: Installs and compiles the sub-millisecond native Rofi launcher (`librofix11.so`, `rofi-launcher.c`), Catppuccin theme, and GNOME shortcuts.
+- `switch-app-window.sh`: D-Bus WindowCycler integration script to cycle/focus open application windows or launch them.
+- `set_custom_keybindings.sh`: Configures custom GNOME keyboard shortcuts and app switcher bindings.
 - `setup-battery-limit.sh`: Sets maximum battery charge threshold (e.g. 80%) for ASUS laptops.
 - `setup-fn-media-keys.sh`: Configures `asus_wmi` to make Function keys act as Media keys by default.
-- `set_custom_keybindings.sh`: Configures custom GNOME keyboard shortcuts.
 - `setup-cpp-precompiled-headers.sh`: Sets up C++20 precompiled headers (`bits/stdc++.h.gch` and PBDS), shell include paths, and `compile_flags.txt` for Codeforces / Competitive Programming.

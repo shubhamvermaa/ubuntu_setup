@@ -17,6 +17,8 @@ configuration {
 	drun-display-format:        "{name}";
     matching:                   "fuzzy";
     sorting-method:             "fzf";
+    drun-use-desktop-cache:     true;
+    drun-reload-desktop-cache:  false;
     run-command:                "/home/shubham/.local/bin/rofi-exec-helper {cmd}";
 
     kb-mode-next:               "Tab";
